@@ -5,7 +5,7 @@
 #include "esphome/components/switch/switch.h"
 
 namespace esphome {
-namespace hbridge {
+namespace valve_actuator {
 
 enum ValveActuatorRestoreMode {
   HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_OFF,
@@ -41,5 +41,5 @@ class HBridgeValveActuator : public switch_::Switch, public Component {
   uint32_t actuator_switching_time_{15000}; //Default 15 seconds, these actuators are really slow due to gearing
 };
 
-}  // namespace hbridge
+}  // namespace valve_actuator
 }  // namespace esphome

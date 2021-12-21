@@ -2,9 +2,9 @@
 #include "esphome/core/log.h"
 
 namespace esphome {
-namespace hbridge {
+namespace valve_actuator {
 
-static const char *const TAG = "hbridge.valve-actuator";
+static const char *const TAG = "valve-actuator";
 
 float HBridgeValveActuator::get_setup_priority() const { return setup_priority::HARDWARE; }
 
@@ -38,7 +38,11 @@ void HBridgeValveActuator::setup() {
     this->turn_on();
   else
     this->turn_off();
-  this->pin_->setup();
+
+  //Setup output pins
+  this->pina_pin_->setup();
+  this->pinb_pin_->setup();
+
   // write after setup again for other IOs
   if (initial_state)
     this->turn_on();
@@ -51,6 +55,8 @@ void HBridgeValveActuator::dump_config() {
   LOG_SWITCH("", "HBridge Valve Actuator", this);
   LOG_PIN("  Pin A: ", this->pina_pin_);
   LOG_PIN("  Pin B: ", this->pinb_pin_);
+  ESP_LOGCONFIG(TAG, "  Actuator switching time: %d", actuator_switching_time_);
+
   const LogString *restore_mode = LOG_STR("");
   switch (this->restore_mode_) {
     case HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_OFF:
@@ -73,35 +79,36 @@ void HBridgeValveActuator::dump_config() {
       break;
   }
   ESP_LOGCONFIG(TAG, "  Restore Mode: %s", LOG_STR_ARG(restore_mode));
-  if (!this->interlock_.empty()) {
-    ESP_LOGCONFIG(TAG, "  Interlocks:");
-    for (auto *lock : this->interlock_) {
-      if (lock == this)
-        continue;
-      ESP_LOGCONFIG(TAG, "    %s", lock->get_name().c_str());
-    }
-  }
 }
 
 
-void HBridgeValveActuator::write_state(bool state) {
+void HBridgeValveActuator::write_state(bool state) 
+{
+  ESP_LOGCONFIG(TAG, "Set valve Actuator state: %d", state);
 
   // cancel any pending "state changes"
   this->cancel_timeout("switching-actuator");
 
   //Set output states to desired state (direction is relative, can be inverted by config or wiring)
-  this->pin_->pina_pin_(state);
-  this->pin_->pinb_pin_(!state);
+  this->pina_pin_->digital_write(state);
+  this->pinb_pin_->digital_write(!state);
 
   //The actuator takes some time to switch to its new state, set a timeout to publish new state
-  this->set_timeout("switching-actuator", this->actuator_switching_time_, [this, state] {
+  this->set_timeout("switching-actuator", this->actuator_switching_time_, [this, state] 
+  {
+    //Put actuator motor back to idle
+    this->pina_pin_->digital_write(false);
+    this->pinb_pin_->digital_write(false);
+
     //After the switching delay, publish new state
     this->publish_state(state);
-  });  
+
+    ESP_LOGCONFIG(TAG, "Switching actuator to state: %d done", state);
+  });
 
 }
 
 void HBridgeValveActuator::set_restore_mode(ValveActuatorRestoreMode restore_mode) { this->restore_mode_ = restore_mode; }
 
-}  // namespace gpio
+}  // namespace valve_actuator
 }  // namespace esphome
