@@ -2,32 +2,39 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import pins
 from esphome.components import switch
-from esphome.const import CONF_ID, CONF_INTERLOCK, CONF_PIN, CONF_RESTORE_MODE
-from .. import gpio_ns
+from esphome.const import (
+    CONF_ID,
+    CONF_PIN_A,
+    CONF_PIN_B,
+    CONF_RESTORE_MODE,
+)
+from .. import hbridge_ns
 
-GPIOSwitch = gpio_ns.class_("GPIOSwitch", switch.Switch, cg.Component)
-GPIOSwitchRestoreMode = gpio_ns.enum("GPIOSwitchRestoreMode")
+HBridgeValveActuator = hbridge_ns.class_(
+    "HBridgeValveActuator", switch.Switch, cg.Component
+)
+HBridgeValveActuatorRestoreMode = hbridge_ns.enum("ValveActuatorRestoreMode")
 
 RESTORE_MODES = {
-    "RESTORE_DEFAULT_OFF": GPIOSwitchRestoreMode.GPIO_SWITCH_RESTORE_DEFAULT_OFF,
-    "RESTORE_DEFAULT_ON": GPIOSwitchRestoreMode.GPIO_SWITCH_RESTORE_DEFAULT_ON,
-    "ALWAYS_OFF": GPIOSwitchRestoreMode.GPIO_SWITCH_ALWAYS_OFF,
-    "ALWAYS_ON": GPIOSwitchRestoreMode.GPIO_SWITCH_ALWAYS_ON,
-    "RESTORE_INVERTED_DEFAULT_OFF": GPIOSwitchRestoreMode.GPIO_SWITCH_RESTORE_INVERTED_DEFAULT_OFF,
-    "RESTORE_INVERTED_DEFAULT_ON": GPIOSwitchRestoreMode.GPIO_SWITCH_RESTORE_INVERTED_DEFAULT_ON,
+    "RESTORE_DEFAULT_OFF": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_OFF,
+    "RESTORE_DEFAULT_ON": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_ON,
+    "ALWAYS_OFF": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_ALWAYS_OFF,
+    "ALWAYS_ON": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_ALWAYS_ON,
+    "RESTORE_INVERTED_DEFAULT_OFF": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_RESTORE_INVERTED_DEFAULT_OFF,
+    "RESTORE_INVERTED_DEFAULT_ON": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_RESTORE_INVERTED_DEFAULT_ON,
 }
 
-CONF_INTERLOCK_WAIT_TIME = "interlock_wait_time"
+CONF_ACTUATOR_SWITCHING_TIME = "actuator_switching_time"
 CONFIG_SCHEMA = switch.SWITCH_SCHEMA.extend(
     {
-        cv.GenerateID(): cv.declare_id(GPIOSwitch),
-        cv.Required(CONF_PIN): pins.gpio_output_pin_schema,
+        cv.GenerateID(): cv.declare_id(HBridgeValveActuator),
+        cv.Required(CONF_PIN_A): pins.gpio_output_pin_schema,
+        cv.Required(CONF_PIN_B): pins.gpio_output_pin_schema,
         cv.Optional(CONF_RESTORE_MODE, default="RESTORE_DEFAULT_OFF"): cv.enum(
             RESTORE_MODES, upper=True, space="_"
         ),
-        cv.Optional(CONF_INTERLOCK): cv.ensure_list(cv.use_id(switch.Switch)),
         cv.Optional(
-            CONF_INTERLOCK_WAIT_TIME, default="0ms"
+            CONF_ACTUATOR_SWITCHING_TIME, default="15000ms"
         ): cv.positive_time_period_milliseconds,
     }
 ).extend(cv.COMPONENT_SCHEMA)
@@ -38,15 +45,13 @@ async def to_code(config):
     await cg.register_component(var, config)
     await switch.register_switch(var, config)
 
-    pin = await cg.gpio_pin_expression(config[CONF_PIN])
-    cg.add(var.set_pin(pin))
+    pina = await cg.gpio_pin_expression(config[CONF_PIN_A])
+    cg.add(var.set_pina_pin(pina))
+
+    pinb = await cg.gpio_pin_expression(config[CONF_PIN_B])
+    cg.add(var.set_pinb_pin(pinb))
 
     cg.add(var.set_restore_mode(config[CONF_RESTORE_MODE]))
 
-    if CONF_INTERLOCK in config:
-        interlock = []
-        for it in config[CONF_INTERLOCK]:
-            lock = await cg.get_variable(it)
-            interlock.append(lock)
-        cg.add(var.set_interlock(interlock))
-        cg.add(var.set_interlock_wait_time(config[CONF_INTERLOCK_WAIT_TIME]))
+    if CONF_ACTUATOR_SWITCHING_TIME in config:
+        cg.add(var.set_actuator_switching_time(config[CONF_ACTUATOR_SWITCHING_TIME]))

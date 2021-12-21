@@ -2,32 +2,33 @@
 #include "esphome/core/log.h"
 
 namespace esphome {
-namespace gpio {
+namespace hbridge {
 
-static const char *const TAG = "switch.gpio";
+static const char *const TAG = "hbridge.valve-actuator";
 
-float GPIOSwitch::get_setup_priority() const { return setup_priority::HARDWARE; }
-void GPIOSwitch::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up GPIO Switch '%s'...", this->name_.c_str());
+float HBridgeValveActuator::get_setup_priority() const { return setup_priority::HARDWARE; }
+
+void HBridgeValveActuator::setup() {
+  ESP_LOGCONFIG(TAG, "Setting up Valve Actuator: '%s'...", this->name_.c_str());
 
   bool initial_state = false;
   switch (this->restore_mode_) {
-    case GPIO_SWITCH_RESTORE_DEFAULT_OFF:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_OFF:
       initial_state = this->get_initial_state().value_or(false);
       break;
-    case GPIO_SWITCH_RESTORE_DEFAULT_ON:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_ON:
       initial_state = this->get_initial_state().value_or(true);
       break;
-    case GPIO_SWITCH_RESTORE_INVERTED_DEFAULT_OFF:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_INVERTED_DEFAULT_OFF:
       initial_state = !this->get_initial_state().value_or(true);
       break;
-    case GPIO_SWITCH_RESTORE_INVERTED_DEFAULT_ON:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_INVERTED_DEFAULT_ON:
       initial_state = !this->get_initial_state().value_or(false);
       break;
-    case GPIO_SWITCH_ALWAYS_OFF:
+    case HBRIDGE_VALVE_ACTUATOR_ALWAYS_OFF:
       initial_state = false;
       break;
-    case GPIO_SWITCH_ALWAYS_ON:
+    case HBRIDGE_VALVE_ACTUATOR_ALWAYS_ON:
       initial_state = true;
       break;
   }
@@ -44,27 +45,30 @@ void GPIOSwitch::setup() {
   else
     this->turn_off();
 }
-void GPIOSwitch::dump_config() {
-  LOG_SWITCH("", "GPIO Switch", this);
-  LOG_PIN("  Pin: ", this->pin_);
+
+
+void HBridgeValveActuator::dump_config() {
+  LOG_SWITCH("", "HBridge Valve Actuator", this);
+  LOG_PIN("  Pin A: ", this->pina_pin_);
+  LOG_PIN("  Pin B: ", this->pinb_pin_);
   const LogString *restore_mode = LOG_STR("");
   switch (this->restore_mode_) {
-    case GPIO_SWITCH_RESTORE_DEFAULT_OFF:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_OFF:
       restore_mode = LOG_STR("Restore (Defaults to OFF)");
       break;
-    case GPIO_SWITCH_RESTORE_DEFAULT_ON:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_ON:
       restore_mode = LOG_STR("Restore (Defaults to ON)");
       break;
-    case GPIO_SWITCH_RESTORE_INVERTED_DEFAULT_ON:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_INVERTED_DEFAULT_ON:
       restore_mode = LOG_STR("Restore inverted (Defaults to ON)");
       break;
-    case GPIO_SWITCH_RESTORE_INVERTED_DEFAULT_OFF:
+    case HBRIDGE_VALVE_ACTUATOR_RESTORE_INVERTED_DEFAULT_OFF:
       restore_mode = LOG_STR("Restore inverted (Defaults to OFF)");
       break;
-    case GPIO_SWITCH_ALWAYS_OFF:
+    case HBRIDGE_VALVE_ACTUATOR_ALWAYS_OFF:
       restore_mode = LOG_STR("Always OFF");
       break;
-    case GPIO_SWITCH_ALWAYS_ON:
+    case HBRIDGE_VALVE_ACTUATOR_ALWAYS_ON:
       restore_mode = LOG_STR("Always ON");
       break;
   }
@@ -78,39 +82,26 @@ void GPIOSwitch::dump_config() {
     }
   }
 }
-void GPIOSwitch::write_state(bool state) {
-  if (state != this->inverted_) {
-    // Turning ON, check interlocking
 
-    bool found = false;
-    for (auto *lock : this->interlock_) {
-      if (lock == this)
-        continue;
 
-      if (lock->state) {
-        lock->turn_off();
-        found = true;
-      }
-    }
-    if (found && this->interlock_wait_time_ != 0) {
-      this->set_timeout("interlock", this->interlock_wait_time_, [this, state] {
-        // Don't write directly, call the function again
-        // (some other switch may have changed state while we were waiting)
-        this->write_state(state);
-      });
-      return;
-    }
-  } else if (this->interlock_wait_time_ != 0) {
-    // If we are switched off during the interlock wait time, cancel any pending
-    // re-activations
-    this->cancel_timeout("interlock");
-  }
+void HBridgeValveActuator::write_state(bool state) {
 
-  this->pin_->digital_write(state);
-  this->publish_state(state);
+  // cancel any pending "state changes"
+  this->cancel_timeout("switching-actuator");
+
+  //Set output states to desired state (direction is relative, can be inverted by config or wiring)
+  this->pin_->pina_pin_(state);
+  this->pin_->pinb_pin_(!state);
+
+  //The actuator takes some time to switch to its new state, set a timeout to publish new state
+  this->set_timeout("switching-actuator", this->actuator_switching_time_, [this, state] {
+    //After the switching delay, publish new state
+    this->publish_state(state);
+  });  
+
 }
-void GPIOSwitch::set_restore_mode(GPIOSwitchRestoreMode restore_mode) { this->restore_mode_ = restore_mode; }
-void GPIOSwitch::set_interlock(const std::vector<Switch *> &interlock) { this->interlock_ = interlock; }
+
+void HBridgeValveActuator::set_restore_mode(ValveActuatorRestoreMode restore_mode) { this->restore_mode_ = restore_mode; }
 
 }  // namespace gpio
 }  // namespace esphome
