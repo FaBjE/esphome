@@ -8,12 +8,13 @@ from esphome.const import (
     CONF_PIN_B,
     CONF_RESTORE_MODE,
 )
-from .. import hbridge_ns
 
-HBridgeValveActuator = hbridge_ns.class_(
+valve_actuator_ns = cg.esphome_ns.namespace("valve_actuator")
+
+HBridgeValveActuator = valve_actuator_ns.class_(
     "HBridgeValveActuator", switch.Switch, cg.Component
 )
-HBridgeValveActuatorRestoreMode = hbridge_ns.enum("ValveActuatorRestoreMode")
+HBridgeValveActuatorRestoreMode = valve_actuator_ns.enum("ValveActuatorRestoreMode")
 
 RESTORE_MODES = {
     "RESTORE_DEFAULT_OFF": HBridgeValveActuatorRestoreMode.HBRIDGE_VALVE_ACTUATOR_RESTORE_DEFAULT_OFF,
